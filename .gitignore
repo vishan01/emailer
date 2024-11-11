@@ -1,0 +1,4 @@
+.venv
+.env
+instance/
+.ruff_cache

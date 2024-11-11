@@ -1,0 +1,142 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Campaign Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto p-6">
+        <!-- Campaign Setup -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h2 class="text-2xl font-bold mb-4">Create Email Campaign</h2>
+            <form id="campaignForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Campaign Name</label>
+                    <input type="text" id="campaignName" required 
+                           class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Email Template</label>
+                    <textarea id="emailPrompt" required 
+                              class="w-full p-2 border rounded h-32" 
+                              placeholder="Dear {name},&#10;&#10;Write your email template here. Use {placeholders} for dynamic content.&#10;&#10;Best regards,&#10;Your Name"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">CSV File</label>
+                    <input type="file" id="csvFile" accept=".csv" required 
+                           class="w-full p-2 border rounded">
+                </div>
+                <button type="submit" 
+                        class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Start Campaign
+                </button>
+            </form>
+        </div>
+
+        <!-- Campaign Progress -->
+        <div id="progressSection" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h3 class="text-lg font-medium text-gray-600">Total Emails</h3>
+                    <p id="totalEmails" class="text-3xl font-bold">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h3 class="text-lg font-medium text-gray-600">Sent</h3>
+                    <p id="sentEmails" class="text-3xl font-bold text-green-600">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h3 class="text-lg font-medium text-gray-600">Pending</h3>
+                    <p id="pendingEmails" class="text-3xl font-bold text-yellow-600">0</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h3 class="text-lg font-medium text-gray-600">Failed</h3>
+                    <p id="failedEmails" class="text-3xl font-bold text-red-600">0</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h2 class="text-2xl font-bold mb-4">Progress</h2>
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div id="progressBar" 
+                         class="bg-blue-500 rounded-full h-4 transition-all duration-500"
+                         style="width: 0%">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentCampaignId = null;
+        let updateInterval = null;
+
+        document.getElementById('campaignForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                // Create campaign
+                const campaignResponse = await fetch('/api/campaign', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: document.getElementById('campaignName').value,
+                        prompt: document.getElementById('emailPrompt').value
+                    })
+                });
+                
+                const campaign = await campaignResponse.json();
+                currentCampaignId = campaign.id;
+                
+                // Upload CSV
+                const formData = new FormData();
+                formData.append('file', document.getElementById('csvFile').files[0]);
+                
+                await fetch(`/api/upload/${campaign.id}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                // Show progress section and start updates
+                document.getElementById('progressSection').classList.remove('hidden');
+                startStatusUpdates();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+
+        function startStatusUpdates() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+            
+            updateInterval = setInterval(async () => {
+                if (!currentCampaignId) return;
+                
+                const response = await fetch(`/api/campaign/${currentCampaignId}/status`);
+                const stats = await response.json();
+                
+                document.getElementById('totalEmails').textContent = stats.total;
+                document.getElementById('sentEmails').textContent = stats.sent;
+                document.getElementById('pendingEmails').textContent = stats.pending;
+                document.getElementById('failedEmails').textContent = stats.failed;
+                
+                const progress = (stats.sent / stats.total) * 100;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+                
+                // Stop updates if all emails are processed
+                if (stats.sent + stats.failed === stats.total) {
+                    clearInterval(updateInterval);
+                }
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
