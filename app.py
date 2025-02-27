@@ -175,7 +175,6 @@ def upload_data(campaign_id):
 
 @app.route("/api/campaign/<int:campaign_id>/status")
 def campaign_status(campaign_id):
-    #campaign = Campaign.query.get_or_404(campaign_id)
     emails = Email.query.filter_by(campaign_id=campaign_id)
 
     stats = {
